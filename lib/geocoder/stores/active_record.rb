@@ -88,6 +88,21 @@ module Geocoder::Store
       end
 
       ##
+      # Value which can be passed to where() to produce no results.
+      #
+      def false_condition
+        using_unextended_sqlite? ? 0 : "false"
+      end
+
+      ##
+      # Prepend table name if column name doesn't already contain one.
+      #
+      def full_column_name(column)
+        column = column.to_s
+        column.include?(".") ? column : [table_name, column].join(".")
+      end
+
+      ##
       # Get options hash suitable for passing to ActiveRecord.find to get
       # records within a radius (in kilometers) of the given point.
       # Options hash may include:
@@ -166,6 +181,35 @@ module Geocoder::Store
         }
       end
 
+      ##
+      # Use OID type when running in PosgreSQL
+      #
+      def null_value
+        using_postgres? ? 'NULL::text' : 'NULL'
+      end
+
+      ##
+      # Generate the SELECT clause.
+      #
+      def select_clause(columns, distance = nil, bearing = nil, distance_column = 'distance', bearing_column = 'bearing')
+        if columns == :id_only
+          return full_column_name(primary_key)
+        elsif columns == :geo_only
+          clause = ""
+        else
+          clause = (columns || full_column_name("*"))
+        end
+        if distance
+          clause += ", " unless clause.empty?
+          clause += "#{distance} AS #{distance_column}"
+        end
+        if bearing
+          clause += ", " unless clause.empty?
+          clause += "#{bearing} AS #{bearing_column}"
+        end
+        clause
+      end
+
       private # ----------------------------------------------------------------
 
       ##
@@ -204,28 +248,6 @@ module Geocoder::Store
       end
 
       ##
-      # Generate the SELECT clause.
-      #
-      def select_clause(columns, distance = nil, bearing = nil, distance_column = 'distance', bearing_column = 'bearing')
-        if columns == :id_only
-          return full_column_name(primary_key)
-        elsif columns == :geo_only
-          clause = ""
-        else
-          clause = (columns || full_column_name("*"))
-        end
-        if distance
-          clause += ", " unless clause.empty?
-          clause += "#{distance} AS #{distance_column}"
-        end
-        if bearing
-          clause += ", " unless clause.empty?
-          clause += "#{bearing} AS #{bearing_column}"
-        end
-        clause
-      end
-
-      ##
       # Adds a condition to exclude a given object by ID.
       # Expects conditions as an array or string. Returns array.
       #
@@ -256,28 +278,6 @@ module Geocoder::Store
 
       def using_postgres?
         connection.adapter_name.match(/postgres/i)
-      end
-
-      ##
-      # Use OID type when running in PosgreSQL
-      #
-      def null_value
-        using_postgres? ? 'NULL::text' : 'NULL'
-      end
-
-      ##
-      # Value which can be passed to where() to produce no results.
-      #
-      def false_condition
-        using_unextended_sqlite? ? 0 : "false"
-      end
-
-      ##
-      # Prepend table name if column name doesn't already contain one.
-      #
-      def full_column_name(column)
-        column = column.to_s
-        column.include?(".") ? column : [table_name, column].join(".")
       end
     end
 
